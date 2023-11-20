@@ -3,6 +3,7 @@ import random
 import os
 import platform
 from time import sleep
+from random import choice
 
 # Constants for the game
 WALL = '#'
@@ -37,6 +38,11 @@ def display_board(board, pacman_pos, ghost_pos):
     for row in temp_board:
         print(' '.join(row))
 
+
+# Function to count the number of pellets remaining
+def count_pellets(board):
+    return np.sum(board == PELLET)
+
 # Function to move Pac-Man or Ghost
 def move_character(position, direction, board):
     new_position = (position[0] + direction[0], position[1] + direction[1])
@@ -70,14 +76,40 @@ def create_custom_layout(layout):
 
     return board, pacman_pos, ghost_pos
 
-def count_pellets(board):
-    return np.sum(board == PELLET)
+# AlphaBeta algorithm implementation
+def alphabeta(board, pacman_pos, ghost_pos, depth, is_max, max_depth=3):
+    if depth == max_depth or is_game_over(pacman_pos, ghost_pos):
+        return None, evaluate(pacman_pos, ghost_pos, board)
 
-# Enhanced Evaluation Function
+    if is_max:
+        best_move = None
+        best_score = float('-inf')
+        for move in DIRECTIONS:
+            new_pos = move_character(pacman_pos, move, board)
+            if new_pos != pacman_pos:
+                _, score = alphabeta(board, new_pos, ghost_pos, depth + 1, False, max_depth)
+                if score > best_score:
+                    best_score = score
+                    best_move = move
+        return best_move, best_score
+    else:
+        best_move = None
+        best_score = float('inf')
+        for pos in ghost_pos:
+            for move in DIRECTIONS:
+                new_pos = move_character(pos, move, board)
+                if new_pos != pos:
+                    _, score = alphabeta(board, pacman_pos, [new_pos if x == pos else x for x in ghost_pos], depth + 1, True, max_depth)
+                    if score < best_score:
+                        best_score = score
+                        best_move = move
+        return best_move, best_score
+
 def evaluate(pacman_pos, ghost_pos, board):
     pellet_count = count_pellets(board)
     ghost_distance = min(abs(pacman_pos[0] - pos[0]) + abs(pacman_pos[1] - pos[1]) for pos in ghost_pos)
-    
+
+    # Increase the penalty for being close to ghosts
     ghost_penalty = -200 if ghost_distance < 4 else 0  # Larger penalty if a ghost is too close
 
     # Find the distance to the nearest pellet
@@ -93,40 +125,6 @@ def evaluate(pacman_pos, ghost_pos, board):
 
     return pellet_reward + pellet_proximity_reward + ghost_penalty
 
-# Alpha-Beta Pruning Implementation
-def alphabeta(board, pacman_pos, ghost_pos, depth, max_depth, alpha, beta, is_max):
-    if depth == max_depth or is_game_over(pacman_pos, ghost_pos):
-        return None, evaluate(pacman_pos, ghost_pos, board)
-
-    if is_max:
-        best_move = None
-        best_score = float('-inf')
-        for move in DIRECTIONS:
-            new_pos = move_character(pacman_pos, move, board)
-            if new_pos != pacman_pos:
-                _, score = alphabeta(board, new_pos, ghost_pos, depth + 1, max_depth, alpha, beta, False)
-                if score > best_score:
-                    best_score = score
-                    best_move = move
-                alpha = max(alpha, score)
-                if alpha >= beta:
-                    break
-        return best_move, best_score
-    else:
-        best_move = None
-        best_score = float('inf')
-        for pos in ghost_pos:
-            for move in DIRECTIONS:
-                new_pos = move_character(pos, move, board)
-                if new_pos != pos:
-                    _, score = alphabeta(board, pacman_pos, [new_pos if x == pos else x for x in ghost_pos], depth + 1, max_depth, alpha, beta, True)
-                    if score < best_score:
-                        best_score = score
-                        best_move = move
-                    beta = min(beta, score)
-                    if alpha >= beta:
-                        break
-        return best_move, best_score
 
 
 def display_board_with_score(board, pacman_pos, ghost_pos, score):
@@ -139,7 +137,7 @@ def display_board_with_score(board, pacman_pos, ghost_pos, score):
         print(' '.join(row))
     print(f"Score: {score}")
 
-# Main game play function with Minimax for Pac-Man and random movement for ghosts
+# Main game play function with AlphaBeta for Pac-Man and random movement for ghosts
 def play_game_with_alphabeta(board_width, board_height, num_ghosts, layout=None):
     if layout:
         board, pacman_pos, ghost_pos = create_custom_layout(layout)
@@ -147,29 +145,31 @@ def play_game_with_alphabeta(board_width, board_height, num_ghosts, layout=None)
         board = create_board(board_width, board_height)
         pacman_pos = (board_height // 2, board_width // 2)
         ghost_pos = [(random.randint(1, board_height - 2), random.randint(1, board_width - 2)) for _ in range(num_ghosts)]
-
-    score = 0
+    score = 0  # Initialize score
 
     while True:
         display_board_with_score(board, pacman_pos, ghost_pos, score)
 
-        # Pac-Man's turn using Alpha-Beta Pruning
-        pacman_move, _ = alphabeta(board, pacman_pos, ghost_pos, 0, 4, float('-inf'), float('inf'), True)
+        # Pac-Man's turn
+        pacman_move, _ = alphabeta(board, pacman_pos, ghost_pos, 0, True, 3)  # Fixed the number of arguments here
         if pacman_move is None:
-            # Choose a safe move if Alpha-Beta returns None
+            # Fallback strategy: choose a random safe move
             pacman_move = choice([move for move in DIRECTIONS if is_move_safe(pacman_pos, move, board, ghost_pos)])
 
         new_pacman_pos = move_character(pacman_pos, pacman_move, board)
         if board[new_pacman_pos] == PELLET:
             board[new_pacman_pos] = EMPTY  # Pac-Man eats the pellet
             score += 10
+        else:
+            score -= 1  # Decrease score for moves without eating a pellet
 
         pacman_pos = new_pacman_pos
 
-        # Random movement for ghosts
+        # Ghosts' turn - Random movement
         new_ghost_pos = []
         for ghost in ghost_pos:
-            new_pos = move_character(ghost, choice(DIRECTIONS), board)
+            ghost_move = choice(DIRECTIONS)
+            new_pos = move_character(ghost, ghost_move, board)
             new_ghost_pos.append(new_pos)
         ghost_pos = new_ghost_pos
 
@@ -180,10 +180,13 @@ def play_game_with_alphabeta(board_width, board_height, num_ghosts, layout=None)
         sleep(1)
 
 
+
+
 # Add a new function to check if a move is safe
 def is_move_safe(pos, move, board, avoid_positions):
     new_pos = (pos[0] + move[0], pos[1] + move[1])
     return board[new_pos] != WALL and new_pos not in avoid_positions
+
 
 
 custom_layout = [
@@ -203,7 +206,8 @@ custom_layout = [
 
 # Main function
 def main():
-    play_game_with_alphabeta(board_width=20, board_height=10, num_ghosts=2, layout=custom_layout)
+    play_game_with_alphabeta(board_width=20, board_height=10, num_ghosts=2, layout=custom_layout)  # Function call is correct
 
+# Run the game
 if __name__ == "__main__":
     main()

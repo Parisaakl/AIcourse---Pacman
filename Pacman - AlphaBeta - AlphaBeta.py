@@ -126,18 +126,6 @@ def evaluate(pacman_pos, ghost_pos, board):
     return pellet_reward + pellet_proximity_reward + ghost_penalty
 
 
-
-    
-# Dynamic depth based on the state of the game
-def get_dynamic_depth(board):
-    pellet_count = count_pellets(board)
-    if pellet_count > 40:
-        return 2  # Shallow depth for more pellets
-    elif pellet_count > 20:
-        return 3  # Medium depth
-    else:
-        return 4  # Deeper search for endgame
-
 def display_board_with_score(board, pacman_pos, ghost_pos, score):
     os.system('cls' if platform.system() == 'Windows' else 'clear')
     temp_board = np.copy(board)
