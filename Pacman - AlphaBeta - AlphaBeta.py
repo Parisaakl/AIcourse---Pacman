@@ -76,10 +76,8 @@ def create_custom_layout(layout):
 
     return board, pacman_pos, ghost_pos
 
-
-# Minimax algorithm implementation
-def alphabeta(board, pacman_pos, ghost_pos, depth, is_max):
-    max_depth = get_dynamic_depth(board)
+# AlphaBeta algorithm implementation
+def alphabeta(board, pacman_pos, ghost_pos, depth, is_max, max_depth=3):
     if depth == max_depth or is_game_over(pacman_pos, ghost_pos):
         return None, evaluate(pacman_pos, ghost_pos, board)
 
@@ -88,8 +86,8 @@ def alphabeta(board, pacman_pos, ghost_pos, depth, is_max):
         best_score = float('-inf')
         for move in DIRECTIONS:
             new_pos = move_character(pacman_pos, move, board)
-            if new_pos != pacman_pos and board[new_pos] != GHOST:  # Avoid moving onto a ghost
-                _, score = alphabeta(board, new_pos, ghost_pos, depth + 1, False)
+            if new_pos != pacman_pos:
+                _, score = alphabeta(board, new_pos, ghost_pos, depth + 1, False, max_depth)
                 if score > best_score:
                     best_score = score
                     best_move = move
@@ -101,7 +99,7 @@ def alphabeta(board, pacman_pos, ghost_pos, depth, is_max):
             for move in DIRECTIONS:
                 new_pos = move_character(pos, move, board)
                 if new_pos != pos:
-                    _, score = alphabeta(board, pacman_pos, [new_pos if x == pos else x for x in ghost_pos], depth + 1, True)
+                    _, score = alphabeta(board, pacman_pos, [new_pos if x == pos else x for x in ghost_pos], depth + 1, True, max_depth)
                     if score < best_score:
                         best_score = score
                         best_move = move
@@ -158,8 +156,7 @@ def play_game_with_alphabeta(board_width, board_height, num_ghosts, layout=None)
         board = create_board(board_width, board_height)
         pacman_pos = (board_height // 2, board_width // 2)
         ghost_pos = [(random.randint(1, board_height - 2), random.randint(1, board_width - 2)) for _ in range(num_ghosts)]
-
-    score = 0
+    score = 0  # Initialize score
 
     while True:
         display_board_with_score(board, pacman_pos, ghost_pos, score)
@@ -167,12 +164,15 @@ def play_game_with_alphabeta(board_width, board_height, num_ghosts, layout=None)
         # Pac-Man's turn
         pacman_move, _ = alphabeta(board, pacman_pos, ghost_pos, 0, True)
         if pacman_move is None:
+            # Fallback strategy: choose a random safe move
             pacman_move = choice([move for move in DIRECTIONS if is_move_safe(pacman_pos, move, board, ghost_pos)])
 
         new_pacman_pos = move_character(pacman_pos, pacman_move, board)
         if board[new_pacman_pos] == PELLET:
             board[new_pacman_pos] = EMPTY  # Pac-Man eats the pellet
             score += 10
+        else:
+            score -= 1  # Decrease score for moves without eating a pellet
 
         pacman_pos = new_pacman_pos
 
